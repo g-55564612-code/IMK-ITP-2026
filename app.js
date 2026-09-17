@@ -84,9 +84,10 @@ function tarikhPapar(iso) {
   const [y,m,d] = iso.split('-').map(Number);
   return `${d} ${BULAN_MS[m-1]} ${y}`;
 }
-function tahap(v) {
-  if (v >= 70) return { nama:'Tinggi',    warna:'--tinggi',    k:'T' };
-  if (v >= 40) return { nama:'Sederhana', warna:'--sederhana', k:'S' };
+function tahap(v, jenis) {
+  const b = jenis === 'IKP' ? [75, 50] : [70, 40];
+  if (v >= b[0]) return { nama:'Tinggi',    warna:'--tinggi',    k:'T' };
+  if (v >= b[1]) return { nama:'Sederhana', warna:'--sederhana', k:'S' };
   return { nama:'Rendah', warna:'--rendah', k:'R' };
 }
 function kategoriIndeks(n) {
@@ -103,7 +104,8 @@ const KRITERIA = {
   'Kritik diri perlu dipantau':'Skor Kritik Diri 70% hingga 79% — tahap tinggi, belum mencapai ambang rujukan.',
   'Ketelusan rendah':'Skor Ketelusan 50% dan ke atas. Dapatan tret mungkin tidak menepati personaliti sebenar, jadi sahkan melalui temu bual.',
   'Resilien rendah':'Skor Resilien 30% dan ke bawah — murid mungkin perlu sokongan ketahanan diri.',
-  'Minat kurang jelas':'Indeks perbezaan 4 dan ke bawah — minat kerjaya belum terarah dan sesuai untuk sesi bimbingan.'
+  'Minat kurang jelas':'Indeks perbezaan 4 dan ke bawah — minat kerjaya belum terarah dan sesuai untuk sesi bimbingan.',
+  'Tiada domain kecerdasan tinggi':'Tiada domain IKP mencapai 75%. Profil kekuatan belum menonjol dan perlu digali melalui aktiviti amali serta temu bual.'
 };
 function isyarat(m) {
   const out = [];
@@ -115,6 +117,8 @@ function isyarat(m) {
     if (m.skor.KTN >= 50) out.push({ jenis:'Ketelusan rendah', huraian:`Skor Ketelusan ${m.skor.KTN}%. Dapatan tret mungkin tidak menepati personaliti sebenar — sahkan melalui temu bual.`, aras:'perhati' });
     if (m.skor.RSL <= 30) out.push({ jenis:'Resilien rendah', huraian:`Skor Resilien ${m.skor.RSL}%. Perlu sokongan ketahanan diri.`, aras:'perhati' });
   }
+  if (m.jenis === 'IKP' && m.status === 'DITAKSIR' && !KUNCI_IKP.some(k => m.skor[k] >= 75))
+    out.push({ jenis:'Tiada domain kecerdasan tinggi', huraian:`Tiada satu pun daripada 10 domain IKP mencapai 75%. Skor tertinggi ialah ${Math.max(...KUNCI_IKP.map(k=>m.skor[k]))}% — bantu murid mengenal pasti kekuatan melalui aktiviti amali.`, aras:'perhati' });
   if (m.jenis === 'IMK' && m.status === 'DITAKSIR' && m.indeks <= 4)
     out.push({ jenis:'Minat kurang jelas', huraian:`Indeks perbezaan hanya ${m.indeks}. Minat kerjaya belum terarah — sesuai untuk sesi bimbingan kerjaya.`, aras:'perhati' });
   return out;
@@ -177,32 +181,34 @@ function heksagon(skor, opt = {}) {
 
 /* --- 2. KIPAS 15 KONSTRUK ITP --- */
 function kipas(skor, opt = {}) {
-  const dlm = opt.dlm || 46, luar = opt.luar || 118, pad = 52;
+  const dlm = opt.dlm || 46, luar = opt.luar || 118, pad = opt.pad || 62;
   const W = (luar + pad) * 2, cx = W/2, cy = W/2;
-  const n = KUNCI.length, lebar = 360/n, jrk = 2.6;
+  const kunci = opt.kunci || KUNCI, peta = opt.peta || KMAP;
+  const maks = opt.maks || (opt.jenis === 'IKP' ? 100 : 99);
+  const n = kunci.length, lebar = 360/n, jrk = 2.6;
   let g = '';
 
-  [30,40,60,70,99].forEach(v=>{
-    const rr = dlm + (luar-dlm) * (v/99);
+  (opt.jenis === 'IKP' ? [25,50,75,100] : [30,40,60,70,99]).forEach(v=>{
+    const rr = dlm + (luar-dlm) * (v/maks);
     g += `<circle cx="${cx}" cy="${cy}" r="${rr.toFixed(1)}" fill="none" stroke="var(--garis)" stroke-width="1" stroke-dasharray="2 4"/>`;
   });
   g += `<circle cx="${cx}" cy="${cy}" r="${dlm}" fill="var(--papan2)" stroke="var(--garis)"/>`;
 
-  KUNCI.forEach((k,i)=>{
-    const v = skor[k] ?? 0, t = tahap(v);
-    const kk = KMAP[k];
+  kunci.forEach((k,i)=>{
+    const v = skor[k] ?? 0, t = tahap(v, opt.jenis);
+    const kk = peta[k];
     const wr = (kk.songsang && v >= (k==='KD'?80:50)) ? '--waspada' : t.warna;
     const a0 = (-90 + i*lebar + jrk/2) * Math.PI/180;
     const a1 = (-90 + (i+1)*lebar - jrk/2) * Math.PI/180;
-    const rr = dlm + (luar-dlm) * (v/99);
+    const rr = dlm + (luar-dlm) * (v/maks);
     const P = (r,a) => [(cx+Math.cos(a)*r).toFixed(1), (cy+Math.sin(a)*r).toFixed(1)];
     const [x1,y1]=P(dlm,a0), [x2,y2]=P(rr,a0), [x3,y3]=P(rr,a1), [x4,y4]=P(dlm,a1);
     g += `<path d="M${x1} ${y1} L${x2} ${y2} A${rr.toFixed(1)} ${rr.toFixed(1)} 0 0 1 ${x3} ${y3} L${x4} ${y4} A${dlm} ${dlm} 0 0 0 ${x1} ${y1} Z" fill="${wv(wr)}" fill-opacity=".85"><title>${kk.nama} — ${v}% (${t.nama})</title></path>`;
     const am = (a0+a1)/2;
-    const [lx,ly] = P(luar+16, am);
-    g += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-size="9.5" font-weight="700" fill="var(--dakwat2)">${k}</text>`;
-    const [vx,vy] = P(luar+31, am);
-    g += `<text x="${vx}" y="${vy}" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-size="9.5" fill="${wv(wr)}">${v}</text>`;
+    const [lx,ly] = P(luar+21, am);
+    g += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-size="9.5">`
+       + `<tspan font-weight="700" fill="var(--dakwat2)">${k}</tspan>`
+       + `<tspan dx="4" fill="${wv(wr)}">${v}</tspan></text>`;
   });
 
   if (opt.tengah) {
@@ -290,7 +296,7 @@ function petaHaba(barisNama, lajurNama, nilai, opt = {}) {
     lajurNama.forEach((c,j)=>{
       const v = nilai[i][j];
       const f = Math.max(0, Math.min(1, (v-min)/(maks-min)));
-      const t = tahap(v);
+      const t = tahap(v, opt.jenis);
       g += `<rect x="${(lblW + j*sel).toFixed(1)}" y="${(kepalaH + i*sel).toFixed(1)}" width="${sel-2}" height="${sel-2}" rx="3" fill="${wv(t.warna)}" fill-opacity="${(0.18 + f*0.82).toFixed(2)}"><title>${esc(r)} — ${esc(c)}: ${v}</title></rect>`;
       g += `<text x="${(lblW + j*sel + (sel-2)/2).toFixed(1)}" y="${(kepalaH + i*sel + (sel-2)/2 + 3.5).toFixed(1)}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="8.5" font-weight="700" fill="${f>0.55?'#fff':'var(--dakwat)'}">${Math.round(v)}</text>`;
     });
@@ -309,12 +315,22 @@ function bina(m) {
     if (m.kod) b.push(m.kod, `kod ${m.kod}`);
     (m.bidang || []).forEach((nm, i) => { b.push(nm); if (i === 0) b.push(`${nm} dominan`, `dominan ${nm}`); });
     HOLLAND.forEach(h => { if (m.skor[h.k] > 0) b.push(h.k, h.kerjaya); });
-    if (m.status === 'DITAKSIR') b.push(kategoriIndeks(m.indeks).nama);
-  } else {
+    if (m.status === 'DITAKSIR') {
+      b.push(kategoriIndeks(m.indeks).nama);
+      if (KERJAYA[m.dominan]) b.push(KERJAYA[m.dominan].bidang, KERJAYA[m.dominan].contoh, KERJAYA[m.dominan].laluan);
+      if (m.ting === 3) cadanganElektif(m).senarai.slice(0,3).forEach(x => b.push(x.e.nama, x.e.id, 'elektif ' + x.e.nama, 'elektif ' + x.e.id));
+    }
+  } else if (m.jenis === 'ITP') {
     KONSTRUK.forEach(k => {
       b.push(k.k, k.nama);
       b.push(`${k.nama} ${tahap(m.skor[k.k]).nama.toLowerCase()}`);
     });
+  } else {
+    KECERDASAN.forEach(k => {
+      b.push(k.k, k.nama);
+      b.push(`${k.nama} ${tahap(m.skor[k.k], 'IKP').nama.toLowerCase()}`);
+    });
+    if (m.ting === 3) cadanganElektif(m).senarai.slice(0,3).forEach(x => b.push(x.e.nama, x.e.id, 'elektif ' + x.e.nama, 'elektif ' + x.e.id));
   }
   isyarat(m).forEach(f => b.push(f.jenis));
   return b.join(' | ').toLowerCase();
@@ -400,10 +416,13 @@ function barisTapis(pilihan = {}) {
     h += `<select class="tapis" data-tapis="jenis">
       <option value="SEMUA"${S.jenis==='SEMUA'?' selected':''}>Semua instrumen</option>
       <option value="IMK"${S.jenis==='IMK'?' selected':''}>IMK — Minat Kerjaya</option>
-      <option value="ITP"${S.jenis==='ITP'?' selected':''}>ITP — Tret Personaliti</option></select>`;
+      <option value="ITP"${S.jenis==='ITP'?' selected':''}>ITP — Tret Personaliti</option>
+      <option value="IKP"${S.jenis==='IKP'?' selected':''}>IKP — Kecerdasan Pelbagai</option></select>`;
   }
-  h += `<select class="tapis" data-tapis="ting"><option value="SEMUA">Semua tingkatan</option>
-    ${tingSenarai.map(t=>`<option value="${t}"${S.ting===String(t)?' selected':''}>${TING_NAMA[t]}</option>`).join('')}</select>`;
+  if (pilihan.ting !== false) {
+    h += `<select class="tapis" data-tapis="ting"><option value="SEMUA">Semua tingkatan</option>
+      ${tingSenarai.map(t=>`<option value="${t}"${S.ting===String(t)?' selected':''}>${TING_NAMA[t]}</option>`).join('')}</select>`;
+  }
   h += `<select class="tapis" data-tapis="kelas"><option value="SEMUA">Semua kelas</option>
     ${kelasSenarai.map(k=>`<option value="${esc(k)}"${S.kelas===k?' selected':''}>${esc(k)}</option>`).join('')}</select>`;
   h += `<select class="tapis" data-tapis="jantina"><option value="SEMUA">Lelaki &amp; perempuan</option>
@@ -424,6 +443,13 @@ function vPapan() {
   const semua = S.murid;
   const imk = semua.filter(m=>m.jenis==='IMK');
   const itp = semua.filter(m=>m.jenis==='ITP');
+  const ikp = semua.filter(m=>m.jenis==='IKP');
+  const muridT3 = new Set(semua.filter(m=>m.ting===3).map(m=>m.ic)).size;
+  const purataIKP = KUNCI_IKP.map(k=>({
+    label:`${k} · ${CMAP[k].nama}`,
+    nilai: ikp.length ? Math.round(purata(ikp.map(m=>m.skor[k]))*10)/10 : 0,
+    warna: tahap(ikp.length ? purata(ikp.map(m=>m.skor[k])) : 0, 'IKP').warna
+  })).sort((x,y)=>y.nilai-x.nilai);
   const ditaksir = semua.filter(m=>m.status==='DITAKSIR');
   const bendera = semua.filter(m=>isyarat(m).length);
   const kelasBil = new Set(semua.map(m=>m.kelasPenuh)).size;
@@ -455,15 +481,25 @@ function vPapan() {
   <div class="tajuk-blok">
     <div class="mata">Pelaporan Pentaksiran Psikometrik &middot; Tahun ${DATA.meta.tahun}</div>
     <h1>Semakan pantas keputusan psikometrik seluruh sekolah</h1>
-    <p class="perihal">${esc(DATA.meta.sekolah)} (${esc(DATA.meta.kodSekolah)}). ${semua.length} rekod murid daripada dua instrumen — Inventori Minat Kerjaya dan Inventori Tret Personaliti — dalam satu paparan yang boleh dicari, ditapis dan dicetak.</p>
+    <p class="perihal">${esc(DATA.meta.sekolah)} (${esc(DATA.meta.kodSekolah)}). ${semua.length} rekod murid daripada tiga instrumen — Minat Kerjaya, Tret Personaliti dan Kecerdasan Pelbagai — dalam satu paparan yang boleh dicari, ditapis dan dicetak, lengkap dengan cadangan elektif Tingkatan 4 dan laluan kerjaya selepas SPM.</p>
   </div>
 
-  <div class="grid g4" style="margin-bottom:14px">
+  <div class="grid g5" style="margin-bottom:14px">
     ${kadAngka('Jumlah rekod', semua.length, `${kelasBil} kelas &middot; Tingkatan ${[...new Set(semua.map(m=>m.ting))].sort().join(', ')}`, '--brand', IKON.murid)}
-    ${kadAngka('Minat Kerjaya (IMK)', imk.length, `${imk.filter(m=>m.status==='DITAKSIR').length} ditaksir`, '--s', IKON.heks)}
-    ${kadAngka('Tret Personaliti (ITP)', itp.length, `${KUNCI.length} konstruk setiap murid`, '--i', IKON.bintang)}
+    ${kadAngka('Minat Kerjaya (IMK)', imk.length, `${imk.filter(m=>m.status==='DITAKSIR').length} ditaksir &middot; T1, T3, T5`, '--s', IKON.heks)}
+    ${kadAngka('Tret Personaliti (ITP)', itp.length, `${KUNCI.length} konstruk &middot; T2, T4`, '--i', IKON.bintang)}
+    ${kadAngka('Kecerdasan Pelbagai (IKP)', ikp.length, `${KUNCI_IKP.length} domain &middot; Tingkatan 3`, '--k', IKON.kelas)}
     ${kadAngka('Perlu perhatian', bendera.length, `${Math.round(bendera.length/semua.length*100)}% daripada semua rekod`, '--waspada', IKON.awas)}
   </div>
+
+  ${muridT3 ? `<div class="kad" style="margin-bottom:14px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+    <div style="flex:1;min-width:260px">
+      <div class="mata">Tindakan seterusnya</div>
+      <h2 style="margin-top:5px">${muridT3} murid Tingkatan 3 perlu memilih elektif</h2>
+      <p style="margin:3px 0 0;font-size:13px;color:var(--dakwat2);max-width:62ch">Padanan antara kod Holland dan profil kecerdasan mereka sudah dikira untuk lapan elektif yang ditawarkan sekolah.</p>
+    </div>
+    <button class="ikon-btn" data-pergi-cepat="elektif">Buka cadangan elektif</button>
+  </div>` : ''}
 
   <div class="grid g-hero" style="margin-bottom:14px">
     <div class="hero">
@@ -494,7 +530,7 @@ function vPapan() {
     </div>
   </div>
 
-  <div class="grid g2">
+  <div class="grid g3">
     <div class="kad">
       <div class="kad-kepala"><div><h2>Kekerapan bidang dalam tiga mata</h2><p>Berapa ramai murid mempunyai bidang ini dalam kod mereka.</p></div></div>
       ${barMelintang(kerapAda, { w:520, lblW:112, alt:'Kekerapan bidang' })}
@@ -503,6 +539,11 @@ function vPapan() {
       <div class="kad-kepala"><div><h2>Purata 15 konstruk ITP</h2><p>Peratus purata seluruh sekolah bagi setiap konstruk tret personaliti.</p></div></div>
       ${barMelintang(purataK, { w:520, lblW:150, maks:99, unit:'%', alt:'Purata konstruk ITP' })}
       ${petunjukTahap()}
+    </div>
+    <div class="kad">
+      <div class="kad-kepala"><div><h2>Purata 10 domain IKP</h2><p>Profil kecerdasan pelbagai murid Tingkatan 3.</p></div></div>
+      ${ikp.length ? barMelintang(purataIKP, { w:560, lblW:196, maks:100, unit:'%', alt:'Purata domain IKP' }) + petunjukIKP()
+        : '<p style="font-size:12.5px;color:var(--dakwat3)">Tiada rekod IKP dalam data semasa.</p>'}
     </div>
   </div>`;
 }
@@ -834,9 +875,10 @@ function vData() {
       <div style="display:flex;flex-wrap:wrap;gap:8px">
         <button class="ikon-btn" data-eksport="IMK">Muat turun IMK (CSV)</button>
         <button class="ikon-btn" data-eksport="ITP">Muat turun ITP (CSV)</button>
+        <button class="ikon-btn" data-eksport="IKP">Muat turun IKP (CSV)</button>
         <button class="ikon-btn" data-eksport="TAPIS">Muat turun hasil penapis</button>
       </div>
-      <p style="font-size:12px;color:var(--dakwat3);margin:12px 0 0">Nombor pengenalan dieksport penuh tanpa mengira tetapan penyamaran pada paparan.</p>
+      <p style="font-size:12px;color:var(--dakwat3);margin:12px 0 0">Nombor pengenalan dieksport penuh tanpa mengira tetapan penyamaran pada paparan. Fail IKP turut mengandungi tiga cadangan elektif setiap murid.</p>
     </div>
     <div class="kad">
       <div class="kad-kepala"><div><h2>Google Sheet</h2><p>Sandaran dan sumber data pilihan.</p></div></div>
@@ -898,6 +940,19 @@ function vPanduan() {
     </div>
   </div>
 
+  <div class="kad" style="margin-bottom:14px">
+    <div class="kad-kepala"><div><h2>Sepuluh domain kecerdasan (IKP)</h2><p>Ditadbir kepada Tingkatan 3. Tafsiran: 75–100% tinggi, 50–74% sederhana, 0–49% rendah.</p></div></div>
+    <div class="grid g2" style="gap:0 22px">
+      <div class="tafsir">${KECERDASAN.slice(0,5).map(k=>`<article style="border-left-color:var(--k)">
+        <h4><span class="mono" style="background:var(--papan3);padding:1px 6px;border-radius:5px;font-size:11.5px">${k.k}</span> ${esc(k.nama)}</h4>
+        <p>${esc(k.ringkas)}</p></article>`).join('')}</div>
+      <div class="tafsir">${KECERDASAN.slice(5).map(k=>`<article style="border-left-color:var(--k)">
+        <h4><span class="mono" style="background:var(--papan3);padding:1px 6px;border-radius:5px;font-size:11.5px">${k.k}</span> ${esc(k.nama)}</h4>
+        <p>${esc(k.ringkas)}</p></article>`).join('')}</div>
+    </div>
+    ${petunjukIKP()}
+  </div>
+
   <div class="grid g2">
     <div class="kad">
       <div class="kad-kepala"><div><h2>Cara mencari</h2><p>Satu medan carian merentas semua medan.</p></div></div>
@@ -906,6 +961,8 @@ function vPanduan() {
         <li>Kelas: <code>4 bestari</code>, <code>tingkatan 2</code></li>
         <li>Kod Holland: <code>SKR</code>, atau nama bidang: <code>artistik</code></li>
         <li>Konstruk ITP: <code>kepimpinan tinggi</code>, <code>resilien rendah</code></li>
+        <li>Domain IKP: <code>logik matematik tinggi</code>, <code>naturalis rendah</code></li>
+        <li>Cadangan elektif: <code>sains tulen</code>, <code>elektif gkt</code></li>
         <li>Isyarat: <code>kritik diri tinggi</code>, <code>tidak ditaksir</code></li>
         <li>Bidang kerjaya: <code>kaunselor</code>, <code>jurutera</code></li>
         <li>Gabungkan bebas: <code>5 arif perempuan sosial</code></li>
@@ -943,7 +1000,7 @@ function bukaProfil(id) {
         <p>Indeks perbezaan <b>${m.indeks}</b> — ${esc(kategoriIndeks(m.indeks).nama.toLowerCase())}. Hanya tiga mata Holland tertinggi diterbitkan dalam laporan PPSi.</p></div>
       <div class="tafsir">
         ${(m.bidang||[]).map((b,i)=>{
-          const h = HOLLAND.find(x=>x.nama===b) || {};
+          const h = HOLLAND.find(x=>x.nama.toUpperCase()===String(b).toUpperCase()) || {};
           return `<article style="border-left-color:${wv(h.warna||'--rendah')}">
             <h4><span class="kod-heks"><i style="background:${wv(h.warna||'--rendah')}">${esc(h.k||'?')}</i></span> Bidang ${i+1}: ${esc(b)}
             <span class="lencana" style="background:color-mix(in srgb,${wv(h.warna||'--rendah')} 15%,transparent);color:${wv(h.warna||'--rendah')}">${m.skor[h.k]||0} mata</span></h4>
@@ -952,6 +1009,28 @@ function bukaProfil(id) {
         }).join('')}
       </div>` : `<div class="amaran"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4 3 19h18z"/><path d="M12 10v4M12 16.5v.3"/></svg>
         <div><b>Murid tidak ditaksir</b><p>${esc(m.sebab||'Tiada sebab direkodkan.')}</p></div></div>`;
+  } else if (m.jenis === 'IKP') {
+    const tinggi = KUNCI_IKP.filter(k=>m.skor[k]>=75).sort((a,b)=>m.skor[b]-m.skor[a]);
+    const rendah = KUNCI_IKP.filter(k=>m.skor[k]<=49).sort((a,b)=>m.skor[a]-m.skor[b]);
+    isi = `
+      ${kipas(m.skor, { kunci:KUNCI_IKP, peta:CMAP, jenis:'IKP', tengah:`${m.purata}%`, tengahLbl:'PURATA' })}
+      ${petunjukIKP()}
+      ${barMelintang(KUNCI_IKP.map(k=>({ label:`${k} · ${CMAP[k].nama}`, nilai:m.skor[k], warna:tahap(m.skor[k],'IKP').warna })),
+        { w:580, lblW:196, maks:100, unit:'%', alt:'Skor domain kecerdasan' })}
+      <div class="tafsir" style="margin-top:18px">
+        <h3 style="margin-bottom:8px">Kecerdasan menonjol (75% dan ke atas)</h3>
+        ${tinggi.length ? tinggi.map(k=>`<article style="border-left-color:var(--tinggi)">
+          <h4><span class="mono" style="background:var(--papan3);padding:1px 6px;border-radius:5px;font-size:11.5px">${k}</span> ${esc(CMAP[k].nama)}
+          <span class="lencana" style="background:color-mix(in srgb,var(--tinggi) 16%,transparent);color:var(--tinggi)">Tinggi ${m.skor[k]}%</span></h4>
+          <p>${esc(CMAP[k].ringkas)}</p></article>`).join('')
+          : '<p style="font-size:12.5px;color:var(--dakwat3)">Tiada domain mencapai tahap tinggi. Bantu murid menemui kekuatan melalui aktiviti amali dan kokurikulum.</p>'}
+        <h3 style="margin:16px 0 8px">Perlu disokong (49% dan ke bawah)</h3>
+        ${rendah.length ? rendah.map(k=>`<article style="border-left-color:var(--rendah)">
+          <h4><span class="mono" style="background:var(--papan3);padding:1px 6px;border-radius:5px;font-size:11.5px">${k}</span> ${esc(CMAP[k].nama)}
+          <span class="lencana" style="background:color-mix(in srgb,var(--rendah) 18%,transparent);color:var(--rendah)">Rendah ${m.skor[k]}%</span></h4>
+          <p>${esc(CMAP[k].ringkas)}</p></article>`).join('')
+          : '<p style="font-size:12.5px;color:var(--dakwat3)">Tiada domain pada tahap rendah.</p>'}
+      </div>`;
   } else {
     const tinggi = KUNCI_TRET.filter(k=>m.skor[k]>=70).sort((a,b)=>m.skor[b]-m.skor[a]);
     const rendah = KUNCI_TRET.filter(k=>m.skor[k]<=30).sort((a,b)=>m.skor[a]-m.skor[b]);
@@ -977,7 +1056,7 @@ function bukaProfil(id) {
   panel.innerHTML = `
     <div class="panel-kepala">
       <div>
-        <div class="mata">${m.jenis === 'IMK' ? 'Inventori Minat Kerjaya' : 'Inventori Tret Personaliti'}</div>
+        <div class="mata">${m.jenis === 'IMK' ? 'Inventori Minat Kerjaya' : m.jenis === 'ITP' ? 'Inventori Tret Personaliti' : 'Inventori Kecerdasan Pelbagai'}</div>
         <h2>${esc(m.nama)}</h2>
         <div class="mono">${icPapar(m.ic)} &middot; ${esc(m.kelasPenuh)} &middot; ${tarikhPapar(m.tarikh)}</div>
       </div>
@@ -993,7 +1072,9 @@ function bukaProfil(id) {
         <div><dt>Tarikh pentaksiran</dt><dd>${tarikhPapar(m.tarikh)}</dd></div>
         ${m.jenis==='IMK'
           ? `<div><dt>Kod Holland</dt><dd>${m.status==='DITAKSIR'?esc(m.kod):'—'}</dd></div><div><dt>Indeks perbezaan</dt><dd>${m.status==='DITAKSIR'?m.indeks:'—'}</dd></div>`
-          : `<div><dt>Purata 13 tret</dt><dd>${m.purata}%</dd></div><div><dt>Ketelusan</dt><dd>${m.skor.KTN}%</dd></div>`}
+          : m.jenis==='ITP'
+          ? `<div><dt>Purata 13 tret</dt><dd>${m.purata}%</dd></div><div><dt>Ketelusan</dt><dd>${m.skor.KTN}%</dd></div>`
+          : `<div><dt>Purata 10 domain</dt><dd>${m.purata}%</dd></div><div><dt>Domain tertinggi</dt><dd>${esc(CMAP[KUNCI_IKP.slice().sort((x,y)=>m.skor[y]-m.skor[x])[0]].nama)}</dd></div>`}
       </dl>
 
       ${f.length ? f.map(x=>`<div class="${x.aras==='waspada'?'amaran':'info'}">
@@ -1001,6 +1082,8 @@ function bukaProfil(id) {
         <div><b>${esc(x.jenis)}</b><p>${esc(x.huraian)}</p></div></div>`).join('') : ''}
 
       ${isi}
+      ${m.ting === 3 ? blokElektif(m) : ''}
+      ${m.ting === 5 && m.jenis === 'IMK' ? blokKerjaya(m) : ''}
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px">
         <button class="ikon-btn" id="btn-cetak-profil">
@@ -1043,10 +1126,21 @@ function keCSV(rekod, jenis) {
               ...HOLLAND.map(h=>h.k),'INDEKS_PERBEZAAN','BIDANG_1','BIDANG_2','BIDANG_3'];
     baris = rekod.map(m=>[m.nama,m.ic,m.jantina,m.ting,m.kelas,m.kelasPenuh,m.tarikh,m.status,m.sebab,m.kod,
       ...HOLLAND.map(h=>m.skor[h.k]||0), m.indeks, (m.bidang||[])[0]||'', (m.bidang||[])[1]||'', (m.bidang||[])[2]||'']);
-  } else {
+  } else if (jenis === 'ITP') {
     kepala = ['NAMA','NO_PENGENALAN','JANTINA','TINGKATAN','KELAS','KELAS_PENUH','TARIKH',...KUNCI,'PURATA_13_KONSTRUK','ISYARAT'];
     baris = rekod.map(m=>[m.nama,m.ic,m.jantina,m.ting,m.kelas,m.kelasPenuh,m.tarikh,
       ...KUNCI.map(k=>m.skor[k]??''), m.purata, isyarat(m).map(x=>x.jenis).join('; ')]);
+  } else {
+    kepala = ['NAMA','NO_PENGENALAN','JANTINA','TINGKATAN','KELAS','KELAS_PENUH','TARIKH',...KUNCI_IKP,
+              'PURATA','DOMAIN_TERTINGGI','ELEKTIF_1','SKOR_1','ELEKTIF_2','SKOR_2','ELEKTIF_3','SKOR_3','ASAS_CADANGAN'];
+    baris = rekod.map(m=>{
+      const c = cadanganElektif(m), t = c.senarai;
+      const atas = KUNCI_IKP.slice().sort((x,y)=>m.skor[y]-m.skor[x])[0];
+      return [m.nama,m.ic,m.jantina,m.ting,m.kelas,m.kelasPenuh,m.tarikh,
+        ...KUNCI_IKP.map(k=>m.skor[k]??''), m.purata, CMAP[atas] ? CMAP[atas].nama : '',
+        t[0]?t[0].e.nama:'', t[0]?t[0].skor:'', t[1]?t[1].e.nama:'', t[1]?t[1].skor:'',
+        t[2]?t[2].e.nama:'', t[2]?t[2].skor:'', c.asas];
+    });
   }
   return '\uFEFF' + [kepala, ...baris].map(r=>r.map(q).join(',')).join('\r\n');
 }
@@ -1059,15 +1153,20 @@ function turun(nama, teks) {
 }
 function eksport(mod) {
   const cap = new Date().toISOString().slice(0,10);
-  if (mod === 'IMK' || mod === 'ITP') {
+  if (mod === 'IMK' || mod === 'ITP' || mod === 'IKP') {
     const r = S.murid.filter(m=>m.jenis===mod);
     turun(`PPSi_${mod}_${DATA.meta.tahun}_${cap}.csv`, keCSV(r, mod));
   } else {
     const r = tapis();
-    const imk = r.filter(m=>m.jenis==='IMK'), itp = r.filter(m=>m.jenis==='ITP');
-    if (imk.length) turun(`PPSi_IMK_tapisan_${cap}.csv`, keCSV(imk,'IMK'));
-    if (itp.length) setTimeout(()=>turun(`PPSi_ITP_tapisan_${cap}.csv`, keCSV(itp,'ITP')), 600);
-    if (!imk.length && !itp.length) alert('Tiada rekod dalam penapis semasa untuk dieksport.');
+    let tunda = 0, ada = false;
+    ['IMK','ITP','IKP'].forEach(j=>{
+      const bhg = r.filter(m=>m.jenis===j);
+      if (!bhg.length) return;
+      ada = true;
+      setTimeout(()=>turun(`PPSi_${j}_tapisan_${cap}.csv`, keCSV(bhg,j)), tunda);
+      tunda += 600;
+    });
+    if (!ada) alert('Tiada rekod dalam penapis semasa untuk dieksport.');
   }
 }
 
@@ -1102,8 +1201,11 @@ function setTema(t) {
 /* ======================================================================== */
 /*                            NAVIGASI DAN LUKISAN                           */
 /* ======================================================================== */
-const PAPARAN = { papan:vPapan, imk:vIMK, itp:vITP, kelas:vKelas, perhatian:vPerhatian, data:vData, panduan:vPanduan };
+const PAPARAN = { papan:vPapan, imk:vIMK, itp:vITP, ikp:vIKP, elektif:vElektif, kerjaya:vKerjaya,
+                  kelas:vKelas, perhatian:vPerhatian, data:vData, panduan:vPanduan };
 const TAJUK = { papan:'Papan Utama', imk:'Inventori Minat Kerjaya', itp:'Inventori Tret Personaliti',
+                ikp:'Inventori Kecerdasan Pelbagai', elektif:'Cadangan Elektif Tingkatan 4',
+                kerjaya:'Laluan Kerjaya Selepas SPM',
                 kelas:'Analisis Kelas', perhatian:'Murid Perlu Perhatian', data:'Data & Sandaran', panduan:'Panduan' };
 
 function lukis() {
@@ -1121,6 +1223,9 @@ function lukis() {
   $('#cetak-tajuk').textContent = `Dashboard PPSi ${DATA.meta.tahun} — ${TAJUK[S.papar]}`;
   $('#kira-imk').textContent = S.murid.filter(m=>m.jenis==='IMK').length;
   $('#kira-itp').textContent = S.murid.filter(m=>m.jenis==='ITP').length;
+  const kIkp = $('#kira-ikp'), kElek = $('#kira-elektif');
+  if (kIkp) kIkp.textContent = S.murid.filter(m=>m.jenis==='IKP').length;
+  if (kElek) kElek.textContent = new Set(S.murid.filter(m=>m.ting===3).map(m=>m.ic)).size;
   $('#kira-flag').textContent = S.murid.filter(m=>isyarat(m).length).length;
   ikat(el);
 }
@@ -1148,6 +1253,7 @@ function ikat(root) {
     b.onclick = () => { $('#cari').value = b.dataset.caripintas; S.cari = b.dataset.caripintas; kemasCari(); lukis(); };
   });
   $$('[data-eksport]', root).forEach(b=>{ b.onclick = () => eksport(b.dataset.eksport); });
+  $$('[data-pergi-cepat]', root).forEach(b=>{ b.onclick = () => pergi(b.dataset.pergiCepat); });
   const r = $('#btn-reset', root);
   if (r) r.onclick = () => {
     S.jenis='SEMUA'; S.ting='SEMUA'; S.kelas='SEMUA'; S.jantina='SEMUA'; S.tapisKod=''; S.cari='';
@@ -1267,4 +1373,494 @@ function mula() {
   pergi(location.hash.slice(1) || 'papan');
   muatSheet();
 }
+
+/* =========================================================================
+   MODUL TAMBAHAN — Tingkatan 3 (IKP), cadangan elektif, laluan kerjaya
+   ========================================================================= */
+
+/* ---------------- Inventori Kecerdasan Pelbagai (10 konstruk) ------------ */
+const KECERDASAN = [
+  { k:'VLM',   nama:'Verbal Linguistik BM', ringkas:'Keupayaan menggunakan bahasa Melayu, memahami maklumat dan memberi respons dalam pelbagai bentuk komunikasi.' },
+  { k:'VLI',   nama:'Verbal Linguistik BI', ringkas:'Keupayaan menggunakan bahasa Inggeris, memahami maklumat dan memberi respons dalam pelbagai bentuk komunikasi.' },
+  { k:'LM',    nama:'Logik Matematik',      ringkas:'Keupayaan menggunakan nombor dalam kehidupan seharian untuk membuat penyelesaian secara logikal.' },
+  { k:'VR',    nama:'Visual Ruang',         ringkas:'Kecerdasan bukan verbal — keupayaan mengguna, menganggar dan mentafsir ruang.' },
+  { k:'MZK',   nama:'Muzik',                ringkas:'Keupayaan menghargai, menghayati dan menggubah muzik.' },
+  { k:'NAT',   nama:'Naturalis',            ringkas:'Keupayaan mengenal pasti dan menghargai alam semula jadi.' },
+  { k:'INTRA', nama:'Intrapersonal',        ringkas:'Keupayaan memahami dan menilai kekuatan, kelemahan, bakat dan minat kendiri.' },
+  { k:'INTER', nama:'Interpersonal',        ringkas:'Keupayaan berkomunikasi, berinteraksi dan bekerjasama dengan orang lain.' },
+  { k:'KN',    nama:'Kinestetik',           ringkas:'Kecerdasan jasmani — keupayaan mengawal dan memahami pergerakan tubuh.' },
+  { k:'EK',    nama:'Eksistensial',         ringkas:'Peka dan berkebolehan membincangkan hal kewujudan seperti mencari makna dalam kehidupan.' }
+];
+const CMAP = Object.fromEntries(KECERDASAN.map(k => [k.k, k]));
+const KUNCI_IKP = KECERDASAN.map(k => k.k);
+
+/* ---------------- Mata pelajaran elektif Tingkatan 4 -------------------- */
+/* Pemberat di bawah ialah rubrik kerja sekolah, bukan formula rasmi KPM.
+   Ubah nilainya di sini jika panitia mahu penekanan berbeza.            */
+const ELEKTIF = [
+  { id:'ST',  nama:'Sains Tulen', warna:'--i',
+    perihal:'Fizik, Kimia, Biologi dan Matematik Tambahan.',
+    holland:{ utama:'I', sokong:['R','K'] },
+    ikp:{ utama:['LM','VR'], sokong:['VLI','NAT'] },
+    syarat:'Menuntut asas Matematik dan Sains yang kukuh dalam PT3 serta ketekunan menjawab soalan berstruktur.',
+    lanjut:'Perubatan, farmasi, kejuruteraan, sains gunaan, bioteknologi, kesihatan bersekutu.' },
+  { id:'SK',  nama:'Sains Komputer', warna:'--i',
+    perihal:'Pemikiran komputasional, algoritma, pengaturcaraan dan pangkalan data.',
+    holland:{ utama:'I', sokong:['K','R'] },
+    ikp:{ utama:['LM','VLI'], sokong:['VR','INTRA'] },
+    syarat:'Menuntut logik yang kemas, kesabaran menyahpepijat dan keselesaan membaca dokumentasi dalam bahasa Inggeris.',
+    lanjut:'Sains komputer, kejuruteraan perisian, keselamatan siber, sains data, rangkaian dan sistem maklumat.' },
+  { id:'PP',  nama:'Prinsip Perakaunan', warna:'--k',
+    perihal:'Kitaran perakaunan, penyata kewangan, perakaunan kos.',
+    holland:{ utama:'K', sokong:['E','I'] },
+    ikp:{ utama:['LM','VLM'], sokong:['INTRA','VLI'] },
+    syarat:'Sesuai untuk murid yang teliti, sabar dengan angka dan suka kerja berstruktur mengikut peraturan.',
+    lanjut:'Perakaunan, audit, percukaian, perbankan, kewangan korporat.' },
+  { id:'PN',  nama:'Pengajian Perniagaan', warna:'--e',
+    perihal:'Pengurusan, pemasaran, keusahawanan dan operasi perniagaan.',
+    holland:{ utama:'E', sokong:['K','S'] },
+    ikp:{ utama:['VLM','INTER'], sokong:['VLI','LM'] },
+    syarat:'Banyak penulisan esei dan kajian kes, jadi kekuatan bahasa amat membantu.',
+    lanjut:'Pengurusan perniagaan, pemasaran, sumber manusia, logistik, keusahawanan.' },
+  { id:'RC',  nama:'Reka Cipta', warna:'--r',
+    perihal:'Proses reka bentuk, inovasi produk dan pembinaan prototaip.',
+    holland:{ utama:'R', sokong:['I','A'] },
+    ikp:{ utama:['VR','KN'], sokong:['LM','NAT'] },
+    syarat:'Berasaskan projek dan kerja tangan — sesuai untuk murid yang suka mencuba dan membina.',
+    lanjut:'Reka bentuk perindustrian, kejuruteraan produk, inovasi dan pembuatan.' },
+  { id:'GKT', nama:'Grafik Komunikasi Teknikal', warna:'--k',
+    perihal:'Lukisan kejuruteraan, unjuran ortografik, lukisan berbantu komputer.',
+    holland:{ utama:'R', sokong:['I','K'] },
+    ikp:{ utama:['VR','LM'], sokong:['KN','INTRA'] },
+    syarat:'Menuntut ketepatan, kekemasan dan keupayaan membayangkan objek tiga dimensi.',
+    lanjut:'Seni bina, ukur bahan, kejuruteraan awam dan mekanikal, pelukis pelan.' },
+  { id:'PSV', nama:'Pendidikan Seni Visual', warna:'--a',
+    perihal:'Seni halus, reka bentuk grafik, sejarah dan apresiasi seni.',
+    holland:{ utama:'A', sokong:['R','S'] },
+    ikp:{ utama:['VR','MZK'], sokong:['KN','INTRA'] },
+    syarat:'Portfolio dan kerja amali berterusan — perlu komitmen masa di luar waktu kelas.',
+    lanjut:'Reka bentuk grafik, animasi, multimedia, seni bina dalaman, fesyen.' },
+  { id:'LN',  nama:'Landskap dan Nurseri', warna:'--r',
+    perihal:'Reka bentuk landskap, pembiakan tanaman dan pengurusan nurseri.',
+    holland:{ utama:'R', sokong:['A','I'] },
+    ikp:{ utama:['NAT','KN'], sokong:['VR','INTRA'] },
+    syarat:'Banyak kerja amali di luar bilik darjah dan penjagaan tanaman berjadual.',
+    lanjut:'Seni bina landskap, hortikultur, pertanian, pengurusan taman dan rekreasi.' }
+];
+
+/* ---------------- Laluan kerjaya selepas SPM (mengikut kod Holland) ------ */
+const KERJAYA = {
+  R:{ bidang:'Teknikal, kejuruteraan dan pengendalian', pendek:'Teknikal & kejuruteraan',
+      laluan:'Politeknik, Kolej Komuniti, ILP/IKBN/ADTEC, Matrikulasi Sains, Tingkatan 6 Sains, Giat MARA',
+      contoh:'Jurutera, juruteknik, mekanik automotif, juruelektrik, juruukur, penyelenggaraan pesawat, tentera dan polis, pertanian' },
+  I:{ bidang:'Penyelidikan, sains dan analisis', pendek:'Penyelidikan & sains',
+      laluan:'Matrikulasi, Asasi Sains universiti awam, Tingkatan 6 Sains, Diploma Sains Kesihatan',
+      contoh:'Doktor, ahli farmasi, saintis makmal, penganalisis data, ahli kimia, pegawai penyelidik, jurutera penyelidikan' },
+  A:{ bidang:'Kreatif, reka bentuk dan media', pendek:'Kreatif & media',
+      laluan:'Diploma seni dan reka bentuk (politeknik/IPTA/IPTS), ASWARA, Tingkatan 6 Sastera, portfolio persendirian',
+      contoh:'Pereka grafik, animator, arkitek, pereka fesyen, penulis, penerbit media, jurugambar, pereka dalaman' },
+  S:{ bidang:'Perkhidmatan, pendidikan dan kesihatan', pendek:'Perkhidmatan & pendidikan',
+      laluan:'Institut Pendidikan Guru (IPG), Matrikulasi, Tingkatan 6, Kolej Sains Kesihatan Bersekutu, Diploma Kerja Sosial',
+      contoh:'Guru, jururawat, kaunselor, pegawai kebajikan, ahli fisioterapi, jurulatih sukan, pegawai perhubungan awam' },
+  E:{ bidang:'Perniagaan, pengurusan dan keusahawanan', pendek:'Perniagaan & pengurusan',
+      laluan:'Diploma Pengurusan Perniagaan, Tingkatan 6 Sastera, UiTM/Kolej Profesional MARA, program keusahawanan',
+      contoh:'Usahawan, eksekutif pemasaran, pengurus jualan, ejen hartanah, pegawai perhubungan pelanggan, peguam' },
+  K:{ bidang:'Pentadbiran, kewangan dan pengurusan data', pendek:'Pentadbiran & kewangan',
+      laluan:'Diploma Perakaunan/Pentadbiran, Tingkatan 6 Perdagangan, LCCI, ACCA Foundation, Kolej Komuniti',
+      contoh:'Akauntan, juruaudit, kerani kanan, pegawai bank, pembantu tadbir, pegawai insurans, pengurus rekod' }
+};
+const GABUNG = {
+  RI:'Kejuruteraan dan teknologi gunaan — mekanikal, elektrik, awam, aeroangkasa, penyelenggaraan industri.',
+  RA:'Seni bina, reka bentuk perindustrian dan pertukangan halus yang menggabungkan ketepatan dengan estetika.',
+  RS:'Sains sukan, perkhidmatan penyelamat, kejururawatan kecemasan dan kejurulatihan.',
+  RE:'Pembinaan dan kontraktor, pengurusan projek teknikal, jualan peralatan industri.',
+  RK:'Penyelenggaraan berjadual, logistik dan gudang, ukur bahan, kawalan kualiti pengeluaran.',
+  IA:'Animasi saintifik, bioinformatik, reka bentuk perubatan, fotografi dan penerbitan sains.',
+  IS:'Perubatan, farmasi, psikologi, pemakanan dan pendidikan sains.',
+  IE:'Aktuari, analitik perniagaan, perundingan teknologi, pengurusan produk.',
+  IK:'Sains data, statistik, makmal kawalan kualiti, penyelidikan pasaran.',
+  AS:'Pendidikan seni, terapi seni, penyiaran, komunikasi dan penerbitan.',
+  AE:'Pengiklanan, pembinaan jenama, keusahawanan kreatif, pengurusan acara.',
+  AK:'Reka bentuk grafik korporat, penerbitan, reka bentuk dalaman, pengurusan arkib visual.',
+  SE:'Sumber manusia, pemasaran, perhubungan awam, latihan korporat dan keguruan.',
+  SK:'Pentadbiran pendidikan, kerja sosial, perkhidmatan pelanggan, pengurusan pejabat.',
+  EK:'Perbankan, perakaunan, insurans, pengurusan perniagaan dan percukaian.'
+};
+const HSUSUN = 'RIASEK';
+function kunciGabung(a, b) {
+  const [x, y] = [a, b].sort((p, q) => HSUSUN.indexOf(p) - HSUSUN.indexOf(q));
+  return x + y;
+}
+
+/* ---------------- Enjin pemadanan --------------------------------------- */
+function pasangan(m) {
+  // rekod pasangan instrumen bagi murid yang sama
+  return S.murid.find(x => x.ic === m.ic && x.jenis !== m.jenis && x.ting === m.ting) || null;
+}
+
+function skorElektif(e, imk, ikp) {
+  let h = null, g = null;
+  if (imk && imk.kod && imk.status === 'DITAKSIR') {
+    const w = [3, 2, 1];
+    let s = 0;
+    [...imk.kod].forEach((c, i) => {
+      if (c === e.holland.utama) s += w[i];
+      else if (e.holland.sokong.includes(c)) s += w[i] * 0.5;
+    });
+    h = Math.min(100, s / 4.5 * 100);
+  }
+  if (ikp && ikp.status === 'DITAKSIR') {
+    let jum = 0, berat = 0;
+    e.ikp.utama.forEach(k => { jum += (ikp.skor[k] || 0) * 2; berat += 2; });
+    e.ikp.sokong.forEach(k => { jum += (ikp.skor[k] || 0); berat += 1; });
+    g = jum / berat;
+  }
+  if (h === null && g === null) return null;
+  if (h === null) return { skor: Math.round(g), asas: 'IKP sahaja' };
+  if (g === null) return { skor: Math.round(h), asas: 'IMK sahaja' };
+  return { skor: Math.round(0.45 * h + 0.55 * g), asas: 'IMK + IKP' };
+}
+
+function cadanganElektif(m) {
+  const lain = pasangan(m);
+  const imk = m.jenis === 'IMK' ? m : (lain && lain.jenis === 'IMK' ? lain : null);
+  const ikp = m.jenis === 'IKP' ? m : (lain && lain.jenis === 'IKP' ? lain : null);
+  const hasil = ELEKTIF.map(e => {
+    const s = skorElektif(e, imk, ikp);
+    return s ? { e, ...s } : null;
+  }).filter(Boolean).sort((a, b) => b.skor - a.skor);
+  return { senarai: hasil, asas: hasil.length ? hasil[0].asas : 'Tiada data' };
+}
+
+function laluanKerjaya(m) {
+  if (!m.kod || m.status !== 'DITAKSIR') return null;
+  const [a, b] = [m.kod[0], m.kod[1]];
+  return {
+    utama: KERJAYA[a],
+    huruf: a,
+    kedua: b,
+    gabung: GABUNG[kunciGabung(a, b)] || '',
+    sokong: KERJAYA[b]
+  };
+}
+
+/* ======================================================================== */
+/*                    PAPARAN — KECERDASAN PELBAGAI (IKP)                    */
+/* ======================================================================== */
+function vIKP() {
+  const simpan = S.jenis; S.jenis = 'IKP';
+  const senarai = susun(tapis({ jenis:true })).filter(m => m.jenis === 'IKP');
+  S.jenis = simpan;
+
+  const purataK = {};
+  KUNCI_IKP.forEach(k => purataK[k] = senarai.length ? Math.round(purata(senarai.map(m => m.skor[k]))) : 0);
+  const barK = KUNCI_IKP.map(k => ({
+    label:`${k} · ${CMAP[k].nama}`, nilai:purataK[k], warna: tahap(purataK[k], 'IKP').warna
+  }));
+  const kelasList = [...new Set(senarai.map(m => m.kelasPenuh))].sort();
+  const matriks = kelasList.map(kl => KUNCI_IKP.map(k =>
+    Math.round(purata(senarai.filter(m => m.kelasPenuh === kl).map(m => m.skor[k])))));
+  const teratas = barK.slice().sort((a, b) => b.nilai - a.nilai)[0];
+  const terendah = barK.slice().sort((a, b) => a.nilai - b.nilai)[0];
+
+  const th = (medan, teks, kls='') =>
+    `<th class="boleh ${kls}"${S.susun.medan===medan?` data-arah="${S.susun.arah}"`:''} data-susun="${medan}">${teks} <span class="ar">${S.susun.medan===medan?(S.susun.arah>0?'▲':'▼'):'⇅'}</span></th>`;
+
+  return `
+  <div class="tajuk-blok">
+    <div class="mata">Instrumen 3 &middot; Tingkatan 3</div>
+    <h1>Inventori Kecerdasan Pelbagai (IKP)</h1>
+    <p class="perihal">Sepuluh domain kecerdasan berdasarkan teori Kecerdasan Pelbagai. Tafsiran PPSi: 75–100% tinggi, 50–74% sederhana, 0–49% rendah. Bacaan ini digunakan bersama IMK untuk mencadangkan elektif Tingkatan 4.</p>
+  </div>
+
+  ${barisTapis({ jenis:false })}
+
+  <div class="grid g4" style="margin-bottom:14px">
+    ${kadAngka('Rekod dipaparkan', senarai.length, `daripada ${S.murid.filter(m=>m.jenis==='IKP').length} rekod IKP`, '--brand', IKON.murid)}
+    ${kadAngka('Kecerdasan tertinggi', teratas ? esc(teratas.label.split(' · ')[1]) : '—', `purata ${teratas?teratas.nilai:0}%`, '--tinggi', IKON.bintang)}
+    ${kadAngka('Paling perlu sokongan', terendah ? esc(terendah.label.split(' · ')[1]) : '—', `purata ${terendah?terendah.nilai:0}%`, '--sederhana', IKON.awas)}
+    ${kadAngka('Murid tanpa domain tinggi', senarai.filter(m=>!KUNCI_IKP.some(k=>m.skor[k]>=75)).length, 'tiada konstruk mencapai 75%', '--waspada', IKON.awas)}
+  </div>
+
+  <div class="grid g-hero" style="margin-bottom:14px">
+    <div class="kad">
+      <div class="kad-kepala"><div><h2>Kipas kecerdasan kumpulan</h2><p>Purata peratus setiap domain bagi ${senarai.length} rekod yang dipaparkan.</p></div></div>
+      ${kipas(purataK, { kunci:KUNCI_IKP, peta:CMAP, jenis:'IKP', tengah:String(senarai.length), tengahLbl:'REKOD' })}
+      ${petunjukIKP()}
+    </div>
+    <div class="kad">
+      <div class="kad-kepala"><div><h2>Purata setiap domain</h2><p>Disusun mengikut skor tertinggi.</p></div></div>
+      ${barMelintang(barK.slice().sort((a,b)=>b.nilai-a.nilai), { w:560, lblW:196, maks:100, unit:'%', alt:'Purata domain IKP' })}
+    </div>
+  </div>
+
+  ${kelasList.length > 1 ? `<div class="kad" style="margin-bottom:14px">
+    <div class="kad-kepala"><div><h2>Peta haba kelas &times; domain</h2><p>Guna paparan ini untuk melihat kekuatan kolektif setiap kelas.</p></div></div>
+    <div style="overflow-x:auto">${petaHaba(kelasList, KUNCI_IKP, matriks, { jenis:'IKP', maks:100, alt:'Peta haba IKP' })}</div>
+    ${petunjukIKP()}
+  </div>` : ''}
+
+  <div class="kad" style="padding:0;overflow:hidden">
+    <div style="padding:16px 18px 12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div><h2>Senarai murid</h2><p style="margin:2px 0 0;font-size:12px;color:var(--dakwat3)">Klik baris untuk profil penuh dan cadangan elektif.</p></div>
+      <span class="lencana" style="background:var(--papan3);color:var(--dakwat2)">${senarai.length} baris</span>
+    </div>
+    <div class="jadual-bekas" style="border:0;border-top:1px solid var(--garis);border-radius:0">
+      ${senarai.length ? `<table><thead><tr>
+        ${th('nama','Nama murid')}${th('kelasPenuh','Kelas')}<th class="tengah">J</th>
+        ${KUNCI_IKP.map(k=>`<th class="boleh tengah"${S.susun.medan==='h:'+k?` data-arah="${S.susun.arah}"`:''} data-susun="h:${k}" title="${esc(CMAP[k].nama)}">${k}</th>`).join('')}
+        ${th('purata','Purata','tengah')}${th('tarikh','Tarikh')}
+      </tr></thead><tbody>
+      ${senarai.map(m=>`<tr data-id="${esc(m.id)}">
+        <td class="nm">${esc(m.nama)}<small>${icPapar(m.ic)}</small></td>
+        <td>${esc(m.kelasPenuh)}</td>
+        <td class="tengah mono">${m.jantina}</td>
+        ${KUNCI_IKP.map(k=>{
+          const v = m.skor[k];
+          return `<td class="sel-skor"><span class="sk k-${tahap(v,'IKP').k}${v>=75?' pekat':''}" style="--o:${(0.10+v/100*0.48).toFixed(2)}">${v}</span></td>`;
+        }).join('')}
+        <td class="tengah mono" style="font-weight:700">${m.purata}</td>
+        <td class="mono" style="font-size:11.5px;color:var(--dakwat3);white-space:nowrap">${tarikhPapar(m.tarikh)}</td>
+      </tr>`).join('')}
+      </tbody></table>` : jadualKosong()}
+    </div>
+  </div>`;
+}
+
+function petunjukIKP() {
+  return `<div class="petunjuk">
+    <span><i style="background:var(--tinggi)"></i>Tinggi 75–100%</span>
+    <span><i style="background:var(--sederhana)"></i>Sederhana 50–74%</span>
+    <span><i style="background:var(--rendah)"></i>Rendah 0–49%</span></div>`;
+}
+
+/* ======================================================================== */
+/*                  PAPARAN — CADANGAN ELEKTIF TINGKATAN 4                   */
+/* ======================================================================== */
+function vElektif() {
+  const asas = tapis({ jenis:true, ting:true }).filter(m => m.ting === 3);
+
+  // satu baris per murid (gabungkan IMK + IKP)
+  const peta = new Map();
+  asas.forEach(m => { if (!peta.has(m.ic)) peta.set(m.ic, m); });
+  const murid = [...peta.values()].sort((a,b) =>
+    a.kelasPenuh.localeCompare(b.kelasPenuh,'ms') || a.nama.localeCompare(b.nama,'ms'));
+
+  const hasil = murid.map(m => ({ m, c: cadanganElektif(m) }));
+  const kiraPilihan = {};
+  ELEKTIF.forEach(e => kiraPilihan[e.id] = 0);
+  hasil.forEach(h => { if (h.c.senarai.length) kiraPilihan[h.c.senarai[0].e.id]++; });
+  const barPilihan = ELEKTIF.map(e => ({ label:e.nama, nilai:kiraPilihan[e.id], warna:e.warna }))
+    .sort((a,b) => b.nilai - a.nilai);
+
+  const lengkap = hasil.filter(h => h.c.asas === 'IMK + IKP').length;
+
+  return `
+  <div class="tajuk-blok">
+    <div class="mata">Perancangan Tingkatan 4</div>
+    <h1>Cadangan mata pelajaran elektif</h1>
+    <p class="perihal">Padanan antara kod Holland (IMK) dan profil kecerdasan (IKP) setiap murid Tingkatan 3 dengan lapan elektif yang ditawarkan sekolah. Gunakan ia sebagai bahan perbincangan semasa sesi bimbingan pemilihan aliran.</p>
+  </div>
+
+  <div class="amaran">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3.5 2.5 20h19L12 3.5Z"/><path d="M12 9.5v5M12 17.2v.3"/></svg>
+    <div><b>Cadangan, bukan penempatan</b>
+    <p>Skor padanan di bawah dikira daripada minat dan kecerdasan sahaja. Ia <b>tidak mengambil kira pencapaian akademik PT3, kuota kelas atau kelayakan mata pelajaran</b> — dan itulah faktor yang sebenarnya menentukan penempatan. Bawa senarai ini ke sesi kaunseling, jangan jadikan ia keputusan muktamad.</p></div>
+  </div>
+
+  ${barisTapis({ jenis:false, ting:false })}
+
+  <div class="grid g4" style="margin-bottom:14px">
+    ${kadAngka('Murid Tingkatan 3', murid.length, `${new Set(murid.map(m=>m.kelasPenuh)).size} kelas`, '--brand', IKON.murid)}
+    ${kadAngka('Padanan penuh', lengkap, 'ada kedua-dua IMK dan IKP', '--tinggi', IKON.heks)}
+    ${kadAngka('Cadangan teratas', barPilihan[0] ? esc(barPilihan[0].label) : '—', `${barPilihan[0]?barPilihan[0].nilai:0} murid`, barPilihan[0]?barPilihan[0].warna:'--brand', IKON.bintang)}
+    ${kadAngka('Padanan lemah', hasil.filter(h=>h.c.senarai[0] && h.c.senarai[0].skor < 50).length, 'skor tertinggi bawah 50 — perlu temu bual', '--sederhana', IKON.awas)}
+  </div>
+
+  <div class="grid g2" style="margin-bottom:14px">
+    <div class="kad">
+      <div class="kad-kepala"><div><h2>Taburan cadangan pertama</h2><p>Bilangan murid bagi setiap elektif sebagai padanan terbaik.</p></div></div>
+      ${barMelintang(barPilihan, { w:500, lblW:190, alt:'Taburan cadangan elektif' })}
+      <p style="font-size:12px;color:var(--dakwat3);margin:12px 0 0">Taburan tidak sekata adalah normal — ia mencerminkan minat kohort, bukan kapasiti kelas.</p>
+    </div>
+    <div class="kad">
+      <div class="kad-kepala"><div><h2>Bagaimana skor dikira</h2><p>Rubrik kerja sekolah, boleh diubah dalam <code>app.js</code>.</p></div></div>
+      <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--dakwat2);line-height:1.8">
+        <li><b>55%</b> daripada IKP — purata berwajaran domain kecerdasan yang berkaitan dengan elektif itu.</li>
+        <li><b>45%</b> daripada IMK — kedudukan bidang Holland elektif itu dalam kod tiga huruf murid (huruf pertama membawa wajaran tertinggi).</li>
+        <li>Murid yang hanya ada satu instrumen tetap mendapat cadangan, dan asasnya ditanda pada baris berkenaan.</li>
+      </ul>
+      <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px">
+        ${ELEKTIF.map(e=>`<span class="lencana" style="background:color-mix(in srgb,${wv(e.warna)} 14%,transparent);color:${wv(e.warna)}">${esc(e.nama)}</span>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <div class="kad" style="padding:0;overflow:hidden">
+    <div style="padding:16px 18px 12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div><h2>Cadangan setiap murid</h2><p style="margin:2px 0 0;font-size:12px;color:var(--dakwat3)">Tiga padanan terbaik mengikut susunan. Klik baris untuk melihat huraian penuh.</p></div>
+      <span class="lencana" style="background:var(--papan3);color:var(--dakwat2)">${murid.length} murid</span>
+    </div>
+    <div class="jadual-bekas" style="border:0;border-top:1px solid var(--garis);border-radius:0">
+      ${murid.length ? `<table><thead><tr>
+        <th>Nama murid</th><th>Kelas</th><th class="tengah">Kod</th>
+        <th>Cadangan 1</th><th>Cadangan 2</th><th>Cadangan 3</th><th class="tengah">Asas</th>
+      </tr></thead><tbody>
+      ${hasil.map(({m,c})=>{
+        const p = pasangan(m);
+        const imk = m.jenis==='IMK'?m:(p&&p.jenis==='IMK'?p:null);
+        const sel = (i)=>{
+          const x = c.senarai[i];
+          if(!x) return '<td style="color:var(--dakwat3)">—</td>';
+          return `<td><div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12.5px;font-weight:${i===0?600:400};min-width:128px">${esc(x.e.nama)}</span>
+            <div class="bar-mini" style="width:44px"><i style="width:${x.skor}%;background:${wv(x.e.warna)}"></i></div>
+            <span class="mono" style="font-size:11px;color:var(--dakwat2)">${x.skor}</span></div></td>`;
+        };
+        return `<tr data-id="${esc(m.id)}">
+          <td class="nm">${esc(m.nama)}<small>${icPapar(m.ic)}</small></td>
+          <td>${esc(m.kelasPenuh)}</td>
+          <td class="tengah">${imk && imk.kod ? kodHeks(imk.kod) : '<span class="mono" style="color:var(--dakwat3)">—</span>'}</td>
+          ${sel(0)}${sel(1)}${sel(2)}
+          <td class="tengah"><span class="lencana" style="background:${c.asas==='IMK + IKP'?'color-mix(in srgb,var(--tinggi) 14%,transparent)':'color-mix(in srgb,var(--sederhana) 16%,transparent)'};color:${c.asas==='IMK + IKP'?'var(--tinggi)':'var(--sederhana)'}">${esc(c.asas)}</span></td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>` : jadualKosong('Tiada murid Tingkatan 3 dalam penapis semasa.')}
+    </div>
+  </div>
+
+  <div class="kad" style="margin-top:14px">
+    <div class="kad-kepala"><div><h2>Lapan elektif yang ditawarkan</h2><p>Apa yang dipelajari, siapa yang sesuai, dan ke mana ia membawa.</p></div></div>
+    <div class="tafsir">
+      ${ELEKTIF.map(e=>`<article style="border-left-color:${wv(e.warna)}">
+        <h4>${esc(e.nama)} <span class="lencana" style="background:color-mix(in srgb,${wv(e.warna)} 14%,transparent);color:${wv(e.warna)}">${e.holland.utama} ${esc(HMAP[e.holland.utama].nama)}</span></h4>
+        <p>${esc(e.perihal)} ${esc(e.syarat)}</p>
+        <p style="margin-top:4px;color:var(--dakwat3);font-size:11.5px"><b>Domain IKP utama:</b> ${e.ikp.utama.map(k=>esc(CMAP[k].nama)).join(', ')} &middot; <b>Membawa ke:</b> ${esc(e.lanjut)}</p>
+      </article>`).join('')}
+    </div>
+  </div>`;
+}
+
+/* ======================================================================== */
+/*                   PAPARAN — LALUAN KERJAYA SELEPAS SPM                    */
+/* ======================================================================== */
+function vKerjaya() {
+  const simpanTing = S.ting, simpanJenis = S.jenis;
+  if (S.ting === 'SEMUA') S.ting = '5';
+  S.jenis = 'IMK';
+  const senarai = susun(tapis({ jenis:true })).filter(m => m.jenis === 'IMK');
+  S.ting = simpanTing; S.jenis = simpanJenis;
+
+  const ditaksir = senarai.filter(m => m.status === 'DITAKSIR');
+  const kiraBidang = HOLLAND.map(h => ({
+    label:`${h.k} · ${KERJAYA[h.k].pendek}`, nilai: ditaksir.filter(m => m.dominan === h.k).length, warna:h.warna
+  })).sort((a,b) => b.nilai - a.nilai);
+
+  return `
+  <div class="tajuk-blok">
+    <div class="mata">Selepas SPM</div>
+    <h1>Laluan kerjaya dan pengajian</h1>
+    <p class="perihal">Cadangan bidang pengajian dan kerjaya berdasarkan kod Holland setiap murid. Sesuai digunakan semasa sesi bimbingan kerjaya, minggu kerjaya, atau perjumpaan ibu bapa Tingkatan 5.</p>
+  </div>
+
+  <div class="info">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.3"/></svg>
+    <p>Senarai kerjaya di bawah ialah contoh lazim bagi setiap bidang Holland, bukan ramalan. Kemasukan sebenar ke matrikulasi, IPG, politeknik atau universiti bergantung pada keputusan SPM dan syarat kemasukan semasa.</p>
+  </div>
+
+  ${barisTapis({ jenis:false })}
+
+  <div class="grid g4" style="margin-bottom:14px">
+    ${kadAngka('Murid dipaparkan', senarai.length, `${new Set(senarai.map(m=>m.kelasPenuh)).size} kelas`, '--brand', IKON.murid)}
+    ${kiraBidang.slice(0,3).map(b=>kadAngka(b.label.split(' · ')[1], b.nilai, `kod bermula dengan ${b.label[0]}`, b.warna, IKON.heks)).join('')}
+  </div>
+
+  <div class="kad" style="margin-bottom:14px">
+    <div class="kad-kepala"><div><h2>Taburan bidang kerjaya dominan</h2><p>Berdasarkan huruf pertama kod Holland.</p></div></div>
+    ${barMelintang(kiraBidang, { w:620, lblW:210, alt:'Taburan bidang kerjaya' })}
+  </div>
+
+  <div class="kad" style="padding:0;overflow:hidden;margin-bottom:14px">
+    <div style="padding:16px 18px 12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div><h2>Cadangan setiap murid</h2><p style="margin:2px 0 0;font-size:12px;color:var(--dakwat3)">Klik baris untuk laluan pengajian penuh.</p></div>
+      <span class="lencana" style="background:var(--papan3);color:var(--dakwat2)">${senarai.length} baris</span>
+    </div>
+    <div class="jadual-bekas" style="border:0;border-top:1px solid var(--garis);border-radius:0">
+      ${senarai.length ? `<table><thead><tr>
+        <th>Nama murid</th><th>Kelas</th><th class="tengah">Kod</th><th>Bidang utama</th><th>Cadangan gabungan dua bidang teratas</th>
+      </tr></thead><tbody>
+      ${senarai.map(m=>{
+        const l = laluanKerjaya(m);
+        return `<tr data-id="${esc(m.id)}">
+          <td class="nm">${esc(m.nama)}<small>${icPapar(m.ic)}</small></td>
+          <td>${esc(m.kelasPenuh)}</td>
+          <td class="tengah">${m.kod?kodHeks(m.kod):'<span class="mono" style="color:var(--dakwat3)">—</span>'}</td>
+          <td style="font-size:12.5px">${l?esc(l.utama.bidang):'<span style="color:var(--dakwat3)">Tidak ditaksir</span>'}</td>
+          <td style="font-size:12.5px;color:var(--dakwat2)">${l?esc(l.gabung):'—'}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>` : jadualKosong()}
+    </div>
+  </div>
+
+  <div class="kad">
+    <div class="kad-kepala"><div><h2>Enam bidang dan laluan selepas SPM</h2><p>Rujukan pantas semasa sesi bimbingan.</p></div></div>
+    <div class="tafsir">
+      ${HOLLAND.map(h=>`<article style="border-left-color:${wv(h.warna)}">
+        <h4><span class="kod-heks"><i style="background:${wv(h.warna)}">${h.k}</i></span> ${esc(KERJAYA[h.k].bidang)}</h4>
+        <p><b>Laluan:</b> ${esc(KERJAYA[h.k].laluan)}</p>
+        <p style="margin-top:4px"><b>Contoh kerjaya:</b> ${esc(KERJAYA[h.k].contoh)}</p>
+      </article>`).join('')}
+    </div>
+  </div>`;
+}
+
+/* ---------------- Blok untuk panel profil ------------------------------- */
+function blokElektif(m) {
+  const c = cadanganElektif(m);
+  if (!c.senarai.length) return '';
+  const tiga = c.senarai.slice(0, 3);
+  return `
+  <div style="margin-top:20px;padding-top:18px;border-top:1px solid var(--garis)">
+    <div class="mata">Perancangan Tingkatan 4</div>
+    <h3 style="margin:5px 0 3px;font-family:var(--papar);font-size:17px;font-weight:400">Cadangan mata pelajaran elektif</h3>
+    <p style="font-size:12px;color:var(--dakwat3);margin:0 0 12px">Dikira daripada ${esc(c.asas)}. Perlu disemak bersama pencapaian PT3.</p>
+    <div class="tafsir">
+      ${tiga.map((x,i)=>`<article style="border-left-color:${wv(x.e.warna)}">
+        <h4><span class="mono" style="background:var(--papan3);padding:1px 6px;border-radius:5px;font-size:11.5px">${i+1}</span> ${esc(x.e.nama)}
+        <span class="lencana" style="background:color-mix(in srgb,${wv(x.e.warna)} 15%,transparent);color:${wv(x.e.warna)}">Padanan ${x.skor}</span></h4>
+        <p>${esc(x.e.perihal)} ${esc(x.e.syarat)}</p>
+        <p style="margin-top:4px;color:var(--dakwat3);font-size:11.5px"><b>Membawa ke:</b> ${esc(x.e.lanjut)}</p>
+      </article>`).join('')}
+    </div>
+    ${barMelintang(c.senarai.map(x=>({label:x.e.nama, nilai:x.skor, warna:x.e.warna})),
+      { w:560, lblW:186, maks:100, alt:'Skor padanan elektif' })}
+    <p style="font-size:11.5px;color:var(--dakwat3);margin:10px 0 0;line-height:1.6">Skor padanan mengukur keserasian minat dan kecerdasan sahaja. Penempatan sebenar bergantung pada keputusan PT3, kuota kelas dan pilihan murid serta ibu bapa.</p>
+  </div>`;
+}
+
+function blokKerjaya(m) {
+  const l = laluanKerjaya(m);
+  if (!l) return '';
+  return `
+  <div style="margin-top:20px;padding-top:18px;border-top:1px solid var(--garis)">
+    <div class="mata">Selepas SPM</div>
+    <h3 style="margin:5px 0 3px;font-family:var(--papar);font-size:17px;font-weight:400">Laluan kerjaya dan pengajian</h3>
+    <p style="font-size:12px;color:var(--dakwat3);margin:0 0 12px">Berdasarkan kod ${esc(m.kod)}.</p>
+    <div class="tafsir">
+      <article style="border-left-color:${wv(HMAP[l.huruf].warna)}">
+        <h4><span class="kod-heks"><i style="background:${wv(HMAP[l.huruf].warna)}">${l.huruf}</i></span> ${esc(l.utama.bidang)}</h4>
+        <p><b>Laluan selepas SPM:</b> ${esc(l.utama.laluan)}</p>
+        <p style="margin-top:4px"><b>Contoh kerjaya:</b> ${esc(l.utama.contoh)}</p>
+      </article>
+      ${l.gabung ? `<article style="border-left-color:var(--signal)">
+        <h4>Gabungan ${esc(m.kod[0])} + ${esc(m.kod[1])}</h4>
+        <p>${esc(l.gabung)}</p></article>` : ''}
+      ${l.sokong ? `<article style="border-left-color:${wv(HMAP[l.kedua].warna)}">
+        <h4><span class="kod-heks"><i style="background:${wv(HMAP[l.kedua].warna)}">${l.kedua}</i></span> Bidang sokongan: ${esc(l.sokong.bidang)}</h4>
+        <p style="color:var(--dakwat3);font-size:11.5px"><b>Contoh kerjaya:</b> ${esc(l.sokong.contoh)}</p></article>` : ''}
+    </div>
+  </div>`;
+}
+
 document.addEventListener('DOMContentLoaded', mula);
