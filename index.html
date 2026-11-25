@@ -90,7 +90,7 @@ html[data-tema="malam"] .gp3{background:#1E6FB8;opacity:.18}
 html[data-tema="malam"] .bintik{opacity:.25;background-image:radial-gradient(rgba(140,152,255,.25) 1px,transparent 1px)}
 
 /* ---------- RANGKA ---------- */
-.rangka{position:relative;z-index:1;display:grid;grid-template-columns:calc(var(--sisi) + 14px) 1fr;min-height:100vh;transition:grid-template-columns .35s var(--lengkung)}
+.rangka{position:relative;display:grid;grid-template-columns:calc(var(--sisi) + 14px) 1fr;min-height:100vh;transition:grid-template-columns .35s var(--lengkung)}
 body.rel .rangka{grid-template-columns:calc(var(--sisi-rel) + 14px) 1fr}
 
 /* ---------- SIDEBAR TERAPUNG ---------- */
@@ -104,6 +104,8 @@ body.rel .rangka{grid-template-columns:calc(var(--sisi-rel) + 14px) 1fr}
   background:radial-gradient(circle,rgba(167,120,255,.28),transparent 65%);pointer-events:none}
 .sisi-gulung{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
 .sisi-gulung::-webkit-scrollbar{display:none}
+.sisi-gulung > *{flex-shrink:0}
+.sisi-kaki{flex-shrink:0}
 
 .jata{display:flex;gap:11px;align-items:center;padding:18px 16px 14px}
 .jata .logo{width:44px;height:44px;flex:none;border-radius:14px;background:#fff;display:grid;place-items:center;
@@ -121,7 +123,7 @@ body.rel .rangka{grid-template-columns:calc(var(--sisi-rel) + 14px) 1fr}
 .nadi{width:7px;height:7px;border-radius:50%;background:var(--hijau);box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:nadi 2s infinite;flex:none}
 @keyframes nadi{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
 
-.nav{padding:0 10px;flex:1}
+.nav{padding:0 10px 8px;flex:1 0 auto}
 .nav-tajuk{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#7083BE;padding:12px 10px 6px;white-space:nowrap}
 .nav a{position:relative;display:flex;align-items:center;gap:11px;padding:7px 9px;border-radius:14px;margin-bottom:2px;
   text-decoration:none;color:#C6D1F0;font-size:13.5px;font-weight:550;white-space:nowrap;transition:background .2s,color .2s}
