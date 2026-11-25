@@ -82,6 +82,34 @@ Nama lajur dalam Sheet mesti kekal sama seperti dalam CSV (`NAMA`, `KELAS_PENUH`
 
 ## Yang ada dalam aplikasi
 
+### Klik mana-mana angka untuk lihat siapa (baharu dalam versi 3)
+
+Setiap kad angka, bar graf, cip kod Holland, huruf heksagon, segmen kipas, petak peta haba
+dan angka bergaris bawah dalam jadual Analisis Kelas boleh diklik. Ia membuka senarai murid
+di sebalik angka itu — nama, kelas, jantina, dan **apa** (skor konstruk, kod Holland, skor
+padanan elektif, atau isyarat yang dikenal pasti).
+
+Dalam senarai itu cikgu boleh:
+
+- tapis nama atau kelas;
+- tukar susunan antara skor dan kelas (kumpulan mengikut kelas);
+- **Salin nama** — terus tampal ke WhatsApp atau surat panggilan;
+- muat turun **CSV** senarai itu sahaja;
+- **cetak** senarai pada satu halaman A4 berserta logo sekolah;
+- klik mana-mana nama untuk membuka profil penuh murid di atas senarai (tekan `Esc` untuk kembali).
+
+Angka bergaris bawah **sentiasa** bermaksud bilangan murid. Purata (contohnya purata indeks)
+dipaparkan sebagai teks biasa.
+
+### Reka bentuk
+
+Latar kaca lavender dengan cahaya bergerak perlahan, sidebar gelap terapung dengan logo
+SMKDUMA (boleh dikecilkan menjadi rel ikon melalui butang *Kecilkan menu*), angka yang mengira
+naik, bar yang tumbuh dan peralihan halaman yang lembut. Semua animasi dimatikan secara automatik
+jika peranti ditetapkan untuk *kurangkan gerakan*, dan tidak muncul langsung dalam cetakan.
+Logo dibenamkan terus dalam `index.html`, jadi tiada fail gambar tambahan diperlukan.
+
+
 **Sepuluh paparan** — Papan Utama, Minat Kerjaya, Tret Personaliti, Kecerdasan Pelbagai, Cadangan Elektif, Laluan Kerjaya SPM, Analisis Kelas, Perlu Perhatian, Data &amp; Sandaran, Panduan.
 
 **Carian satu medan** merentas nama, kelas, tingkatan, kod Holland, nama bidang, konstruk ITP, domain IKP, cadangan elektif, contoh kerjaya dan isyarat perhatian. Frasa penuh diberi keutamaan, jadi `kritik diri tinggi` memulangkan murid berkenaan sahaja dan bukan setiap rekod yang mengandungi kata "tinggi".
