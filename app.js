@@ -279,6 +279,7 @@ function barisTapis(pilihan = {}) {
     h += `<span style="width:8px"></span>` + HOLLAND.map(hh=>
       `<button class="cip${S.tapisKod===hh.k?' on':''}" data-kod="${hh.k}"><span class="titik" style="background:${wv(hh.warna)}"></span>${hh.k}</button>`).join('');
   }
+  if (S.cari.trim()) h += `<button class="cip on cip-cari" data-kosong-cari type="button">Carian: “${esc(S.cari.trim())}” <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
   h += `<button class="reset" id="btn-reset">Tetapkan semula</button></div>`;
   return h;
 }
@@ -688,6 +689,7 @@ function lukis(animasi = false) {
   if (kElek) kElek.textContent = new Set(S.murid.filter(m=>m.ting===3).map(m=>m.ic)).size;
   $('#kira-flag').textContent = S.murid.filter(m=>isyarat(m).length).length;
   ikat(el);
+  hasilCari(false);
 }
 
 function ikat(root) {
@@ -714,6 +716,7 @@ function ikat(root) {
   });
   $$('[data-eksport]', root).forEach(b=>{ b.onclick = () => eksport(b.dataset.eksport); });
   $$('[data-pergi-cepat]', root).forEach(b=>{ b.onclick = () => pergi(b.dataset.pergiCepat); });
+  $$('[data-kosong-cari]', root).forEach(b => { b.onclick = kosongkanCari; });
   const r = $('#btn-reset', root);
   if (r) r.onclick = () => {
     S.jenis='SEMUA'; S.ting='SEMUA'; S.kelas='SEMUA'; S.jantina='SEMUA'; S.tapisKod=''; S.cari='';
@@ -809,8 +812,15 @@ function mula() {
 
   jam(); setInterval(jam, 1000);
 
-  $('#cari').addEventListener('input', e => { S.cari = e.target.value; kemasCari(); lukis(); });
-  $('#btn-kosong').onclick = () => { $('#cari').value=''; S.cari=''; kemasCari(); lukis(); $('#cari').focus(); };
+  $('#cari').addEventListener('input', e => {
+    S.cari = e.target.value; kemasCari();
+    clearTimeout(window._tangguhCari);
+    window._tangguhCari = setTimeout(() => { lukis(); hasilCari(true); }, 160);
+  });
+  $('#cari').addEventListener('focus', () => { if (S.cari.trim()) hasilCari(true); });
+  $('#cari').addEventListener('blur', () => setTimeout(tutupHasilCari, 200));
+  $('#cari').addEventListener('keydown', kekunciCari);
+  $('#btn-kosong').onclick = () => { kosongkanCari(); $('#cari').focus(); };
   const tukarTema = () => setTema(document.documentElement.dataset.tema === 'malam' ? 'siang' : 'malam');
   $('#btn-tema').onclick = tukarTema;
   if ($('#btn-tema2')) $('#btn-tema2').onclick = tukarTema;
@@ -838,6 +848,7 @@ function mula() {
     const t = e.target.closest('[data-senarai]');
     if (!t || t.closest('#senarai')) return;
     e.preventDefault();
+    tutupHasilCari();
     bukaSenarai(t.dataset.senarai);
   });
   document.addEventListener('keydown', e => {
@@ -851,7 +862,8 @@ function mula() {
 
   document.addEventListener('keydown', e=>{
     if (e.key === 'Escape') {
-      if ($('#panel').classList.contains('buka')) tutupProfil();
+      if ($('#hasil-cari') && $('#hasil-cari').classList.contains('buka')) tutupHasilCari();
+      else if ($('#panel').classList.contains('buka')) tutupProfil();
       else if ($('#senarai').classList.contains('buka')) tutupSenarai();
       else tutupSisi();
     }
@@ -1403,7 +1415,7 @@ function salamMasa() {
 }
 
 function vPapan() {
-  const semua = S.murid;
+  const semua = S.cari.trim() ? tapis({ jenis: true, ting: true, kelas: true, jantina: true, kod: true }) : S.murid;
   const imk = semua.filter(m => m.jenis === 'IMK'), itp = semua.filter(m => m.jenis === 'ITP'), ikp = semua.filter(m => m.jenis === 'IKP');
   const bendera = semua.filter(m => isyarat(m).length);
   const kelasBil = new Set(semua.map(m => m.kelasPenuh)).size;
@@ -1438,10 +1450,15 @@ function vPapan() {
   const barT3 = ELEKTIF.map(e => ({ label: e.nama, nilai: hasil.filter(h => h.c.senarai[0] && h.c.senarai[0].e.id === e.id).length,
     warna: e.warna, senarai: lsElektif(hasil, e, 'pertama', `${ctx} · Cadangan pertama`) })).sort((a, b) => b.nilai - a.nilai);
 
+  if (S.cari.trim() && !semua.length) return `
+  ${tajukBlok(`${salamMasa()} &middot; PPSi ${DATA.meta.tahun}`, 'Semakan psikometrik <em>seluruh sekolah</em>', '')}
+  ${barisCari()}
+  <div class="kad">${jadualKosong(`Tiada rekod sepadan dengan “${S.cari.trim()}”. Cuba nama, kelas (contoh: 3 Bestari), kod Holland (SKR) atau konstruk (kepimpinan tinggi).`)}</div>`;
   return `
   ${tajukBlok(`${salamMasa()} &middot; PPSi ${DATA.meta.tahun}`, 'Semakan psikometrik <em>seluruh sekolah</em>',
     `${esc(DATA.meta.sekolah)}. ${semua.length} rekod daripada tiga instrumen. <b>Klik mana-mana angka, bar atau kod</b> untuk melihat murid di sebaliknya.`,
     `<button class="ikon-btn utama-btn" data-pergi-cepat="elektif">Cadangan elektif ${PANAH}</button>`)}
+  ${barisCari()}
 
   <div class="grid g5" style="margin-bottom:16px">
     ${kadAngka('Jumlah rekod', semua.length, `${kelasBil} kelas &middot; T${[...new Set(semua.map(m => m.ting))].sort().join(', T')}`, '--brand', IKON.murid, kSemua)}
@@ -2140,6 +2157,96 @@ function hidupkan(el) {
     };
     requestAnimationFrame(langkah);
   });
+}
+
+
+/* ======================================================================== */
+/*                       CARIAN — KOTAK HASIL SEGERA                         */
+/* ======================================================================== */
+let _pilihHC = -1, _kunciSemuaHC = null;
+
+function barisCari() {
+  if (!S.cari.trim()) return '';
+  return `<div class="baris-tapis"><span class="tapis-lbl">Papan ditapis</span>
+    <button class="cip on cip-cari" data-kosong-cari type="button">Carian: “${esc(S.cari.trim())}” <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`;
+}
+
+function kosongkanCari() {
+  $('#cari').value = ''; S.cari = ''; kemasCari(); tutupHasilCari(); lukis();
+}
+
+function tandaPadanan(teks) {
+  const kata = S.cari.trim().split(/\s+/).filter(k => k.length > 1).map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const t = esc(teks);
+  if (!kata.length) return t;
+  return t.replace(new RegExp(`(${kata.join('|')})`, 'gi'), '<mark>$1</mark>');
+}
+
+function hasilCari(buka) {
+  const kotak = $('#hasil-cari');
+  if (!kotak) return;
+  const q = S.cari.trim();
+  if (!q) { tutupHasilCari(); return; }
+  if (!buka && !kotak.classList.contains('buka')) return;
+
+  const rekod = tapis({ jenis: true, ting: true, kelas: true, jantina: true, kod: true });
+  const peta = new Map();
+  rekod.forEach(m => { if (!peta.has(m.ic)) peta.set(m.ic, []); peta.get(m.ic).push(m); });
+  const murid = [...peta.values()];
+  _kunciSemuaHC = rekod.length ? daftar(`Hasil carian “${q}”`, rekod, { eyebrow: 'Carian',
+    huraian: `${murid.length} murid (${rekod.length} rekod) sepadan dengan carian ini.` }) : null;
+  _pilihHC = -1;
+
+  if (!rekod.length) {
+    kotak.innerHTML = `<div class="hc-kosong"><b>Tiada padanan untuk “${esc(q)}”</b>
+      Cuba nama murid, kelas (<i>3 Bestari</i>), kod Holland (<i>SKR</i>), konstruk (<i>kepimpinan tinggi</i>) atau elektif (<i>sains tulen</i>).</div>`;
+  } else {
+    const tunjuk = murid.slice(0, 7);
+    kotak.innerHTML = `<div class="hc-tajuk"><span>${murid.length} murid ditemui</span><span>${rekod.length} rekod</span></div>
+      ${tunjuk.map(arr => {
+        const m = arr[0], [a1, a2] = warnaAvatar(m.nama);
+        const cip = arr.map(x => `<span class="lencana" style="${gayaL(x.jenis === 'IMK' ? '--s' : x.jenis === 'ITP' ? '--i' : '--k')}">${x.jenis}${x.jenis === 'IMK' && x.kod ? ' ' + x.kod : ''}</span>`).join('');
+        return `<button class="hc-baris" type="button" data-id="${esc(m.id)}">
+          <span class="avatar" style="--av1:${a1};--av2:${a2}">${esc(inisial(m.nama))}</span>
+          <span class="bm-teks"><b>${tandaPadanan(m.nama)}</b><small>${tandaPadanan(m.kelasPenuh)} · ${m.jantina === 'L' ? 'Lelaki' : m.jantina === 'P' ? 'Perempuan' : '—'}</small></span>
+          <span class="hc-cip">${cip}</span></button>`;
+      }).join('')}
+      <button class="hc-kaki" type="button" data-senarai="${_kunciSemuaHC}">Lihat semua ${murid.length} murid dalam senarai ${PANAH}</button>`;
+  }
+  kotak.classList.add('buka');
+  $$('.hc-baris', kotak).forEach(b => {
+    b.onmousedown = e => e.preventDefault();      // elak blur sebelum klik
+    b.onclick = () => { tutupHasilCari(); $('#cari').blur(); bukaProfil(b.dataset.id); };
+  });
+  const kaki = $('.hc-kaki', kotak);
+  if (kaki) kaki.onmousedown = e => e.preventDefault();
+}
+
+function tutupHasilCari() {
+  const k = $('#hasil-cari'); if (k) k.classList.remove('buka');
+  _pilihHC = -1;
+}
+
+function kekunciCari(e) {
+  const kotak = $('#hasil-cari');
+  const baris = kotak ? $$('.hc-baris', kotak) : [];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!kotak.classList.contains('buka')) hasilCari(true);
+    if (!baris.length) return;
+    e.preventDefault();
+    _pilihHC = (_pilihHC + (e.key === 'ArrowDown' ? 1 : -1) + baris.length) % baris.length;
+    baris.forEach((b, i) => b.classList.toggle('pilih', i === _pilihHC));
+    baris[_pilihHC].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    clearTimeout(window._tangguhCari);
+    S.cari = e.target.value; lukis();
+    if (_pilihHC >= 0 && baris[_pilihHC]) { baris[_pilihHC].click(); return; }
+    hasilCari(true);
+    if (_kunciSemuaHC) { tutupHasilCari(); e.target.blur(); bukaSenarai(_kunciSemuaHC); }
+  } else if (e.key === 'Escape') {
+    if (kotak && kotak.classList.contains('buka')) { e.stopPropagation(); tutupHasilCari(); }
+  }
 }
 
 document.addEventListener('DOMContentLoaded', mula);
